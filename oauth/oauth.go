@@ -14,7 +14,7 @@
 
 // Package oauth is consumer interface for OAuth 1.0, OAuth 1.0a and RFC 5849.
 //
-// Redirection-based Authorization
+// # Redirection-based Authorization
 //
 // This section outlines how to use the oauth package in redirection-based
 // authorization (http://tools.ietf.org/html/rfc5849#section-2).
@@ -40,7 +40,7 @@
 // secret and verifier, request token credentials using the client RequestToken
 // method. Save the returned credentials for later use in the application.
 //
-// Signing Requests
+// # Signing Requests
 //
 // The Client type has two low-level methods for signing requests, SignForm and
 // SetAuthorizationHeader.
@@ -58,16 +58,16 @@
 // supplied net/http Client. These methods are easy to use, but not as flexible
 // as constructing a request using one of the low-level methods.
 //
-// Context With HTTP Client
+// # Context With HTTP Client
 //
 // A context-enabled method can include a custom HTTP client in the
 // context and execute an HTTP request using the included HTTP client.
 //
-//     hc := &http.Client{Timeout: 2 * time.Second}
-//     ctx := context.WithValue(context.Background(), oauth.HTTPClient, hc)
-//     c := oauth.Client{ /* Any settings */ }
-//     resp, err := c.GetContext(ctx, &oauth.Credentials{}, rawurl, nil)
-package oauth // import "github.com/gomodule/oauth1/oauth"
+//	hc := &http.Client{Timeout: 2 * time.Second}
+//	ctx := context.WithValue(context.Background(), oauth.HTTPClient, hc)
+//	c := oauth.Client{ /* Any settings */ }
+//	resp, err := c.GetContext(ctx, &oauth.Credentials{}, rawurl, nil)
+package oauth // import "github.com/merlincox/oauth1/oauth"
 
 import (
 	"bytes"
@@ -283,6 +283,9 @@ type Client struct {
 	// Also known as the consumer key and secret
 	Credentials Credentials
 
+	// Realm is ignored if it is an empty string, otherwise it is added to the Authorization header
+	Realm string
+
 	// TemporaryCredentialRequestURI is the endpoint used by the client to
 	// obtain a set of temporary credentials. Also known as the request token
 	// URL.
@@ -329,6 +332,7 @@ type request struct {
 	method        string
 	u             *url.URL
 	form          url.Values
+	jsonBody      string
 	verifier      string
 	sessionHandle string
 	callbackURL   string
@@ -490,6 +494,11 @@ func (c *Client) authorizationHeader(r *request) (string, error) {
 		if v, ok := p[k]; ok {
 			if h == nil {
 				h = []byte(`OAuth `)
+				if c.Realm != "" {
+					h = append(h, []byte(`realm="`)...)
+					h = append(h, []byte(c.Realm)...)
+					h = append(h, []byte(`",`)...)
+				}
 			} else {
 				h = append(h, ", "...)
 			}
@@ -529,7 +538,11 @@ func (c *Client) SetAuthorizationHeader(header http.Header, credentials *Credent
 func (c *Client) do(ctx context.Context, urlStr string, r *request) (*http.Response, error) {
 	var body io.Reader
 	if r.method != http.MethodGet {
-		body = strings.NewReader(r.form.Encode())
+		if r.jsonBody != "" {
+			body = strings.NewReader(r.jsonBody)
+		} else {
+			body = strings.NewReader(r.form.Encode())
+		}
 	}
 	req, err := http.NewRequest(r.method, urlStr, body)
 	if err != nil {
@@ -550,7 +563,11 @@ func (c *Client) do(ctx context.Context, urlStr string, r *request) (*http.Respo
 	if r.method == http.MethodGet {
 		req.URL.RawQuery = r.form.Encode()
 	} else {
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		if r.jsonBody != "" {
+			req.Header.Set("Content-Type", "application/json")
+		} else {
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
 	}
 	req = req.WithContext(ctx)
 	client := contextClient(ctx)
@@ -569,14 +586,14 @@ func (c *Client) GetContext(ctx context.Context, credentials *Credentials, urlSt
 }
 
 // Post issues a POST with the specified form.
-func (c *Client) Post(client *http.Client, credentials *Credentials, urlStr string, form url.Values) (*http.Response, error) {
+func (c *Client) Post(client *http.Client, credentials *Credentials, urlStr string, form url.Values, jsonBody string) (*http.Response, error) {
 	ctx := context.WithValue(context.Background(), HTTPClient, client)
-	return c.PostContext(ctx, credentials, urlStr, form)
+	return c.PostContext(ctx, credentials, urlStr, form, jsonBody)
 }
 
 // PostContext uses Context to perform Post.
-func (c *Client) PostContext(ctx context.Context, credentials *Credentials, urlStr string, form url.Values) (*http.Response, error) {
-	return c.do(ctx, urlStr, &request{method: http.MethodPost, credentials: credentials, form: form})
+func (c *Client) PostContext(ctx context.Context, credentials *Credentials, urlStr string, form url.Values, jsonBody string) (*http.Response, error) {
+	return c.do(ctx, urlStr, &request{method: http.MethodPost, credentials: credentials, form: form, jsonBody: jsonBody})
 }
 
 // Delete issues a DELETE with the specified form.
@@ -591,14 +608,14 @@ func (c *Client) DeleteContext(ctx context.Context, credentials *Credentials, ur
 }
 
 // Put issues a PUT with the specified form.
-func (c *Client) Put(client *http.Client, credentials *Credentials, urlStr string, form url.Values) (*http.Response, error) {
+func (c *Client) Put(client *http.Client, credentials *Credentials, urlStr string, form url.Values, jsonBody string) (*http.Response, error) {
 	ctx := context.WithValue(context.Background(), HTTPClient, client)
-	return c.PutContext(ctx, credentials, urlStr, form)
+	return c.PutContext(ctx, credentials, urlStr, form, jsonBody)
 }
 
 // PutContext uses Context to perform Put.
-func (c *Client) PutContext(ctx context.Context, credentials *Credentials, urlStr string, form url.Values) (*http.Response, error) {
-	return c.do(ctx, urlStr, &request{method: http.MethodPut, credentials: credentials, form: form})
+func (c *Client) PutContext(ctx context.Context, credentials *Credentials, urlStr string, form url.Values, jsonBody string) (*http.Response, error) {
+	return c.do(ctx, urlStr, &request{method: http.MethodPut, credentials: credentials, form: form, jsonBody: jsonBody})
 }
 
 func (c *Client) requestCredentials(ctx context.Context, u string, r *request) (*Credentials, url.Values, error) {
