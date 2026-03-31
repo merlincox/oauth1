@@ -24,8 +24,8 @@ import (
 	"net/url"
 	"text/template"
 
-	"github.com/gomodule/oauth1/examples/session"
-	"github.com/gomodule/oauth1/oauth"
+	"github.com/merlincox/oauth1/examples/session"
+	"github.com/merlincox/oauth1/oauth"
 )
 
 // Session state keys.

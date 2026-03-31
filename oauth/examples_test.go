@@ -19,7 +19,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/gomodule/oauth1/oauth"
+	"github.com/merlincox/oauth1/oauth"
 )
 
 // This example shows how to sign a request when the URL Opaque field is used.
