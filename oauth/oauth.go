@@ -84,7 +84,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"sort"
@@ -177,8 +176,8 @@ func (p byKeyValue) appendValues(values url.Values) byKeyValue {
 // base string computation described in section 3.4.1 of the RFC.
 func writeBaseString(w io.Writer, method string, u *url.URL, form url.Values, oauthParams map[string]string) {
 	// Method
-	w.Write(encode(strings.ToUpper(method), false))
-	w.Write([]byte{'&'})
+	_, _ = w.Write(encode(strings.ToUpper(method), false))
+	_, _ = w.Write([]byte{'&'})
 
 	// URL
 	scheme := strings.ToLower(u.Scheme)
@@ -195,11 +194,11 @@ func writeBaseString(w io.Writer, method string, u *url.URL, form url.Values, oa
 		host = host[:len(host)-len(":443")]
 	}
 
-	w.Write(encode(scheme, false))
-	w.Write(encode("://", false))
-	w.Write(encode(host, false))
-	w.Write(encode(path, false))
-	w.Write([]byte{'&'})
+	_, _ = w.Write(encode(scheme, false))
+	_, _ = w.Write(encode("://", false))
+	_, _ = w.Write(encode(host, false))
+	_, _ = w.Write(encode(path, false))
+	_, _ = w.Write([]byte{'&'})
 
 	// Create sorted slice of encoded parameters. Parameter keys and values are
 	// double encoded in a single step. This is safe because double encoding
@@ -219,13 +218,13 @@ func writeBaseString(w io.Writer, method string, u *url.URL, form url.Values, oa
 	sep := false
 	for _, kv := range p {
 		if sep {
-			w.Write(encodedAmp)
+			_, _ = w.Write(encodedAmp)
 		} else {
 			sep = true
 		}
-		w.Write(kv.key)
-		w.Write(encodedEqual)
-		w.Write(kv.value)
+		_, _ = w.Write(kv.key)
+		_, _ = w.Write(encodedEqual)
+		_, _ = w.Write(kv.value)
 	}
 }
 
@@ -626,8 +625,8 @@ func (c *Client) requestCredentials(ctx context.Context, u string, r *request) (
 	if err != nil {
 		return nil, nil, err
 	}
-	p, err := ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
+	p, err := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
 	if err != nil {
 		return nil, nil, RequestCredentialsError{StatusCode: resp.StatusCode, Header: resp.Header,
 			Body: p, msg: err.Error()}
