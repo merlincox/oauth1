@@ -148,7 +148,7 @@ func apiGet(cred *oauth.Credentials, urlStr string, form url.Values, data interf
 
 // apiPost issues a POST request to the Twitter API and decodes the response JSON to data.
 func apiPost(cred *oauth.Credentials, urlStr string, form url.Values, data interface{}) error {
-	resp, err := oauthClient.Post(nil, cred, urlStr, form, "")
+	resp, err := oauthClient.Post(nil, cred, urlStr, form)
 	if err != nil {
 		return err
 	}
