@@ -270,25 +270,6 @@ const (
 	RSASHA256                         // RSA-SHA256
 )
 
-// type for better support for variable body content type
-type ContentType int
-
-// String maps ContentType to Content-Type header
-func (ct ContentType) String() string {
-	switch ct {
-	case JSON:
-		return "application/json"
-	default:
-		return "application/x-www-form-urlencoded"
-	}
-}
-
-const (
-	// FORM_URL_ENCODED is the default ContentType of a non-GET request
-	FORM_URL_ENCODED ContentType = iota
-	JSON
-)
-
 // Credentials represents client, temporary and token credentials.
 type Credentials struct {
 	Token  string // Also known as consumer key or access token.
@@ -349,7 +330,6 @@ type request struct {
 	credentials   *Credentials
 	method        string
 	u             *url.URL
-	contentType   ContentType
 	form          url.Values
 	body          io.Reader
 	verifier      string
@@ -557,10 +537,8 @@ func (c *Client) SetAuthorizationHeader(header http.Header, credentials *Credent
 func (c *Client) do(ctx context.Context, urlStr string, r *request) (*http.Response, error) {
 	var body io.Reader
 	if r.method != http.MethodGet {
-		switch r.contentType {
-		case JSON:
-			body = r.body
-		default:
+		body = r.body
+		if r.form != nil {
 			body = strings.NewReader(r.form.Encode())
 		}
 	}
@@ -583,7 +561,9 @@ func (c *Client) do(ctx context.Context, urlStr string, r *request) (*http.Respo
 	if r.method == http.MethodGet {
 		req.URL.RawQuery = r.form.Encode()
 	} else {
-		req.Header.Set("Content-Type", r.contentType.String())
+		if r.form != nil {
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
 	}
 	req = req.WithContext(ctx)
 	client := contextClient(ctx)
@@ -612,15 +592,15 @@ func (c *Client) PostContext(ctx context.Context, credentials *Credentials, urlS
 	return c.do(ctx, urlStr, &request{method: http.MethodPost, credentials: credentials, form: form})
 }
 
-// PostJson issues a POST of the specified Json content.
-func (c *Client) PostJson(client *http.Client, credentials *Credentials, urlStr string, body io.Reader) (*http.Response, error) {
+// PostBody issues a POST of the specified content, a content-type header must be set independently.
+func (c *Client) PostBody(client *http.Client, credentials *Credentials, urlStr string, body io.Reader) (*http.Response, error) {
 	ctx := context.WithValue(context.Background(), HTTPClient, client)
-	return c.PostJsonContext(ctx, credentials, urlStr, body)
+	return c.PostBodyContext(ctx, credentials, urlStr, body)
 }
 
-// PostJsonContext uses Context to perform a Post of the specified Json content.
-func (c *Client) PostJsonContext(ctx context.Context, credentials *Credentials, urlStr string, body io.Reader) (*http.Response, error) {
-	return c.do(ctx, urlStr, &request{method: http.MethodPost, credentials: credentials, body: body, contentType: JSON})
+// PostBodyContext uses Context to perform a Post of the specified content, a content-type header must be set independently
+func (c *Client) PostBodyContext(ctx context.Context, credentials *Credentials, urlStr string, body io.Reader) (*http.Response, error) {
+	return c.do(ctx, urlStr, &request{method: http.MethodPost, credentials: credentials, body: body})
 }
 
 // Delete issues a DELETE with the specified form.
@@ -645,15 +625,15 @@ func (c *Client) PutContext(ctx context.Context, credentials *Credentials, urlSt
 	return c.do(ctx, urlStr, &request{method: http.MethodPut, credentials: credentials, form: form})
 }
 
-// PutJson issues a PUT with the specified form.
-func (c *Client) PutJson(client *http.Client, credentials *Credentials, urlStr string, body io.Reader) (*http.Response, error) {
+// PutBody issues a PUT of the specified content, a content-type header must be set independently.
+func (c *Client) PutBody(client *http.Client, credentials *Credentials, urlStr string, body io.Reader) (*http.Response, error) {
 	ctx := context.WithValue(context.Background(), HTTPClient, client)
-	return c.PutJsonContext(ctx, credentials, urlStr, body)
+	return c.PutBodyContext(ctx, credentials, urlStr, body)
 }
 
-// PutJsonContext uses Context to perform Put.
-func (c *Client) PutJsonContext(ctx context.Context, credentials *Credentials, urlStr string, body io.Reader) (*http.Response, error) {
-	return c.do(ctx, urlStr, &request{method: http.MethodPut, credentials: credentials, body: body, contentType: JSON})
+// PutBodyContext uses Context to perform a Put of the specified content, a content-type header must be set independently
+func (c *Client) PutBodyContext(ctx context.Context, credentials *Credentials, urlStr string, body io.Reader) (*http.Response, error) {
+	return c.do(ctx, urlStr, &request{method: http.MethodPut, credentials: credentials, body: body})
 }
 
 func (c *Client) requestCredentials(ctx context.Context, u string, r *request) (*Credentials, url.Values, error) {
