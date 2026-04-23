@@ -324,6 +324,9 @@ type Client struct {
 	// must be set for RSA-SHA* signatures and ignored for other signature
 	// methods.
 	PrivateKey *rsa.PrivateKey
+
+	// AllowURLQueries determines if URL queries are allowed
+	AllowURLQueries bool
 }
 
 type request struct {
@@ -546,7 +549,7 @@ func (c *Client) do(ctx context.Context, urlStr string, r *request) (*http.Respo
 	if err != nil {
 		return nil, err
 	}
-	if req.URL.RawQuery != "" {
+	if req.URL.RawQuery != "" && !c.AllowURLQueries {
 		return nil, errors.New("oauth: url must not contain a query string")
 	}
 	for k, v := range c.Header {
