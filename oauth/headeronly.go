@@ -77,7 +77,8 @@ func (c *Authorizer) hmacSignature(tokenSecret string, req *http.Request, h func
 	return base64.StdEncoding.EncodeToString(hm.Sum(key[:0]))
 }
 
-func (c *Authorizer) authorize(req *http.Request) error {
+// Authorize sets an Authorization header in the request, based on secrets and the request
+func (c *Authorizer) Authorize(req *http.Request) error {
 	authHeader, err := c.authorizationHeader(req)
 	if err != nil {
 		return err
