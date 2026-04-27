@@ -1,16 +1,18 @@
 package oauth
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
 	"hash"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
 )
 
-type HMACSHA256Credentials struct {
+type Authorizer struct {
 	// Consumer specifies the client key and secret.
 	// Also known as the consumer key and secret
 	Consumer Credentials
@@ -22,7 +24,7 @@ type HMACSHA256Credentials struct {
 	Realm string
 }
 
-func (c *HMACSHA256Credentials) authorizationHeader(req http.Request) (string, error) {
+func (c *Authorizer) authorizationHeader(req *http.Request) (string, error) {
 	p, err := c.oauthParams(req)
 	if err != nil {
 		return "", err
@@ -50,7 +52,7 @@ func (c *HMACSHA256Credentials) authorizationHeader(req http.Request) (string, e
 	return string(h), nil
 }
 
-func (c *HMACSHA256Credentials) oauthParams(req http.Request) (map[string]string, error) {
+func (c *Authorizer) oauthParams(req *http.Request) (map[string]string, error) {
 	oauthParams := map[string]string{
 		"oauth_consumer_key":     c.Consumer.Token,
 		"oauth_signature_method": "HMAC-SHA256",
@@ -65,7 +67,7 @@ func (c *HMACSHA256Credentials) oauthParams(req http.Request) (map[string]string
 	return oauthParams, nil
 }
 
-func (c *HMACSHA256Credentials) hmacSignature(tokenSecret string, req http.Request, h func() hash.Hash, oauthParams map[string]string) string {
+func (c *Authorizer) hmacSignature(tokenSecret string, req *http.Request, h func() hash.Hash, oauthParams map[string]string) string {
 	key := encode(c.Consumer.Secret, false)
 	key = append(key, '&')
 	key = append(key, encode(tokenSecret, false)...)
@@ -75,7 +77,7 @@ func (c *HMACSHA256Credentials) hmacSignature(tokenSecret string, req http.Reque
 	return base64.StdEncoding.EncodeToString(hm.Sum(key[:0]))
 }
 
-func (c *HMACSHA256Credentials) authorise(req http.Request) error {
+func (c *Authorizer) authorize(req *http.Request) error {
 	authHeader, err := c.authorizationHeader(req)
 	if err != nil {
 		return err
@@ -86,4 +88,31 @@ func (c *HMACSHA256Credentials) authorise(req http.Request) error {
 	req.Header.Set("Authorization", authHeader)
 
 	return nil
+}
+
+func (c *Authorizer) Get(ctx context.Context, urlStr string, client *http.Client, header http.Header) (*http.Response, error) {
+	return c.do(ctx, urlStr, http.MethodGet, nil, client, header)
+}
+
+func (c *Authorizer) Post(ctx context.Context, urlStr string, client *http.Client, header http.Header, body io.Reader) (*http.Response, error) {
+	return c.do(ctx, urlStr, http.MethodPost, body, client, header)
+}
+
+func (c *Authorizer) do(ctx context.Context, urlStr, method string, body io.Reader, client *http.Client, header http.Header) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, method, urlStr, body)
+	if err != nil {
+		return nil, err
+	}
+
+	for k, v := range header {
+		req.Header[k] = v
+	}
+
+	auth, err := c.authorizationHeader(req)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", auth)
+	req = req.WithContext(ctx)
+	return client.Do(req)
 }
