@@ -66,7 +66,7 @@
 //	hc := &http.Client{Timeout: 2 * time.Second}
 //	ctx := context.WithValue(context.Background(), oauth.HTTPClient, hc)
 //	c := oauth.Client{ /* Any settings */ }
-//	resp, err := c.GetContext(ctx, &oauth.Credentials{}, rawurl, nil)
+//	resp, err := c.GetContext(ctx, &oauth.Consumer{}, rawurl, nil)
 package oauth // import "github.com/merlincox/oauth1/oauth"
 
 import (

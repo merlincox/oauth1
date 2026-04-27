@@ -1,22 +1,19 @@
 package oauth
 
 import (
-	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
 	"hash"
-	"io"
 	"net/http"
-	"net/url"
 	"strconv"
 	"time"
 )
 
-type Standalone struct {
-	// Credentials specifies the client key and secret.
+type HMACSHA256Credentials struct {
+	// Consumer specifies the client key and secret.
 	// Also known as the consumer key and secret
-	Credentials Credentials
+	Consumer Credentials
 
 	// Token specifies the token and token secret.
 	Token Credentials
@@ -25,8 +22,8 @@ type Standalone struct {
 	Realm string
 }
 
-func (c *Standalone) authorizationHeader(httpMethod string, parsedURL *url.URL) (string, error) {
-	p, err := c.oauthParams(httpMethod, parsedURL)
+func (c *HMACSHA256Credentials) authorizationHeader(req http.Request) (string, error) {
+	p, err := c.oauthParams(req)
 	if err != nil {
 		return "", err
 	}
@@ -53,56 +50,40 @@ func (c *Standalone) authorizationHeader(httpMethod string, parsedURL *url.URL) 
 	return string(h), nil
 }
 
-func (c *Standalone) oauthParams(httpMethod string, parsedURL *url.URL) (map[string]string, error) {
+func (c *HMACSHA256Credentials) oauthParams(req http.Request) (map[string]string, error) {
 	oauthParams := map[string]string{
-		"oauth_consumer_key":     c.Credentials.Token,
+		"oauth_consumer_key":     c.Consumer.Token,
 		"oauth_signature_method": "HMAC-SHA256",
 		"oauth_version":          "1.0",
+		"oauth_timestamp":        strconv.FormatInt(time.Now().Unix(), 10),
+		"oauth_nonce":            nonce(),
+		"oauth_token":            c.Token.Token,
 	}
 
-	oauthParams["oauth_timestamp"] = strconv.FormatInt(time.Now().Unix(), 10)
-	oauthParams["oauth_nonce"] = nonce()
+	oauthParams["oauth_signature"] = c.hmacSignature(c.Token.Secret, req, sha256.New, oauthParams)
 
-	oauthParams["oauth_token"] = c.Token.Token
-
-	testHook(oauthParams)
-
-	oauthParams["oauth_signature"] = c.hmacSignature(c.Token.Secret, httpMethod, parsedURL, sha256.New, oauthParams)
 	return oauthParams, nil
 }
 
-func (c *Standalone) hmacSignature(tokenSecret string, method string, parsedURL *url.URL, h func() hash.Hash, oauthParams map[string]string) string {
-	key := encode(c.Credentials.Secret, false)
+func (c *HMACSHA256Credentials) hmacSignature(tokenSecret string, req http.Request, h func() hash.Hash, oauthParams map[string]string) string {
+	key := encode(c.Consumer.Secret, false)
 	key = append(key, '&')
 	key = append(key, encode(tokenSecret, false)...)
 	hm := hmac.New(h, key)
-	writeBaseString(hm, method, parsedURL, nil, oauthParams)
+	writeBaseString(hm, req.Method, req.URL, nil, oauthParams)
+
 	return base64.StdEncoding.EncodeToString(hm.Sum(key[:0]))
 }
 
-func (c *Standalone) Get(ctx context.Context, urlStr string, client *http.Client, header http.Header) (*http.Response, error) {
-	return c.do(ctx, urlStr, http.MethodGet, nil, client, header)
-}
-
-func (c *Standalone) Post(ctx context.Context, urlStr string, client *http.Client, header http.Header, body io.Reader) (*http.Response, error) {
-	return c.do(ctx, urlStr, http.MethodPost, body, client, header)
-}
-
-func (c *Standalone) do(ctx context.Context, urlStr, method string, body io.Reader, client *http.Client, header http.Header) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, method, urlStr, body)
+func (c *HMACSHA256Credentials) authorise(req http.Request) error {
+	authHeader, err := c.authorizationHeader(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
+	if req.Header == nil {
+		req.Header = make(http.Header, 1)
+	}
+	req.Header.Set("Authorization", authHeader)
 
-	for k, v := range header {
-		req.Header[k] = v
-	}
-
-	auth, err := c.authorizationHeader(method, req.URL)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", auth)
-	req = req.WithContext(ctx)
-	return client.Do(req)
+	return nil
 }
